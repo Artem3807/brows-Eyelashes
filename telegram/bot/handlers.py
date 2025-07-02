@@ -1,77 +1,15 @@
-import asyncio
-import logging
+from aiogram.types import Message
+from keyboards import create_main_keyboard, create_services_keyboard, create_booking_keyboard
+from aiogram.types import FSInputFile
+from datetime import datetime
 import os
-import sqlite3
-from datetime import datetime, timedelta
-from aiogram import Bot, Dispatcher, types
-from aiogram.filters import CommandStart
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, FSInputFile
-
-BOT_TOKEN = "7603562097:AAE0l1TsdMKHklZh2-vlc9mUj9nGiLyjkzE" # Ваш токен
-
-logging.basicConfig(level=logging.INFO)
-
-bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher()
-
-# Подключение к базе данных
-conn = sqlite3.connect('bookings.db', check_same_thread=False)
-cursor = conn.cursor()
-cursor.execute('''
-CREATE TABLE IF NOT EXISTS bookings (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER,
-    username TEXT,
-    service TEXT,
-    date TEXT,
-    time TEXT,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-)
-''')
-conn.commit()
 
 user_states = {}
-# Функция для создания клавиатуры с основными действиями
-def create_main_keyboard():
-    keyboard = ReplyKeyboardMarkup(
-        resize_keyboard=True,
-        keyboard=[
-            [KeyboardButton(text="/info")]
-        ]
-    )
-    return keyboard
 
-# Функция для создания клавиатуры с услугами
-def create_services_keyboard():
-    keyboard = ReplyKeyboardMarkup(
-        resize_keyboard=True,
-        keyboard=[
-            [KeyboardButton(text="Ламинирование ресниц")],
-            [KeyboardButton(text="Ламинирование ресниц с окрашиванием")],
-            [KeyboardButton(text="Окрашивание бровей с коррекцией")],
-            [KeyboardButton(text="Ламинирование бровей с коррекцией + окрашиванием")],
-            [KeyboardButton(text="Окрашивание ресниц")],
-            [KeyboardButton(text="Назад")]
-        ]
-    )
-    return keyboard
-
-# Функция для создания клавиатуры с кнопкой "Записаться"
-def create_booking_keyboard():
-    keyboard = ReplyKeyboardMarkup(
-        resize_keyboard=True,
-        keyboard=[
-            [KeyboardButton(text="Записаться")]
-        ]
-    )
-    return keyboard
-
-@dp.message(CommandStart())
-async def command_start_handler(message: types.Message):
+async def command_start_handler(message: Message):
     await message.answer("Привет! Выбери действие:", reply_markup=create_main_keyboard())
 
-@dp.message()
-async def button_handler(message: types.Message):
+async def button_handler(message: Message):
     user_id = message.from_user.id
     if message.text == "/info":
         info_text = "Это информационное сообщение!"
@@ -128,8 +66,9 @@ async def button_handler(message: types.Message):
             date = user_states[user_id]["date"]
             time_str = user_states[user_id]["time"]
 
+            from main import cursor, conn
             cursor.execute('INSERT INTO bookings (user_id, username, service, date, time) VALUES (?, ?, ?, ?, ?)',
-                           (user_id, message.from_user.username, service, date, time_str))
+                          (user_id, message.from_user.username, service, date, time_str))
             conn.commit()
 
             await message.answer(f"Вы успешно записаны на услугу {service} на {date} в {time_str}!", reply_markup=create_services_keyboard())
@@ -140,12 +79,3 @@ async def button_handler(message: types.Message):
         await message.answer("Вы вернулись в главное меню", reply_markup=create_main_keyboard())
     else:
         await message.answer("Неизвестная кнопка")
-
-async def main():
-    await dp.start_polling(bot)
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    finally:
-        conn.close()
